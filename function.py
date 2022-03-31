@@ -75,16 +75,12 @@ if __name__ == '__main__':
     data["2"] = []
     data["6"] = []
     type = "2"
-    with open("6N_320_4.txt") as file:
+    with open("480N_V_6.txt") as file:
         for line in file:
             line = line.strip()
             if line.startswith("#"):
                 break
             if line:
-                # angles = line.split(" ")
-                # angles = [float(angle) if float(angle) < 90 else  float(angle)-180 for angle in angles]
-                # std = np.std(angles)
-                # mean = np.mean(angles)
                 score = float(line)
                 data[type].append(score)
             else:
@@ -94,8 +90,31 @@ if __name__ == '__main__':
     print("# 6row mean: {0:.6f} std: {1:.6f}".format(np.mean(data["6"]), np.std(data["6"])))
 
     sns.set_theme()
-    sns.distplot(data["2"], bins=10, label="symmetrical", kde=False)
-    sns.distplot(data["6"], bins=10, label="twisted", kde=False)
+    sns.distplot(data["2"], label="2")
+    sns.distplot(data["6"], label="6")
     plt.title('score distribution')
     plt.legend()
     plt.show()
+
+    # data = np.zeros((71, 3))
+    # with open("scores.txt") as file:
+    #     row = 0
+    #     col = 0
+    #     for line in file:
+    #         line = line.strip()
+    #         if line:
+    #             score = float(line)
+    #             data[row % 71][col] = score if score < 90 else score - 180
+    #         else:
+    #             col += 1
+    #             row -= 1
+    #
+    #         row += 1
+    #
+    # difference = [max(d) - min(d) for d in data]
+    #
+    # sns.set_theme()
+    # sns.distplot(difference, kde=False)
+    # plt.title('score differences')
+    # plt.legend()
+    # plt.show()

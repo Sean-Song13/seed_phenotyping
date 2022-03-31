@@ -77,7 +77,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
     start_timer = time.perf_counter()
     roi, image_center = pad_for_rotation(image_roi[..., 0])
     size = roi.shape[0]
-    raw_anglestep = 6
+    raw_anglestep = 4
     anglestep = raw_anglestep
     ############################################
     # apply Planar-Reflective Symmetry Transform
@@ -92,105 +92,50 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
         imgR = rotate(roi, -angle * anglestep)
         imgF = imgR[::-1]
 
-        for offset in range(0, size):
-            # A.ravel().dot(B.ravel())
-            if size < 350:
-                expect = imgR[:offset].ravel().dot(imgR[:offset].ravel())
-                reflect = imgR[:offset].ravel().dot(imgF[(size - offset):].ravel())
-            else:
-                # np.einsum('ij,ij', A, B)
-                expect = np.einsum('ij,ij', imgR[:offset], imgR[:offset])
-                reflect = np.einsum('ij,ij', imgR[:offset], imgF[(size - offset):])
-
-            # expect = np.sum(imgR[:offset] * imgR[:offset])
-            # reflect = np.sum(imgR[:offset] * imgF[(size - offset):])
-            symmetryMap[angle, offset] = 0.0 if expect == 0 else reflect / expect
-
-        for offset in range(size, num_offsets):
-            idxOffset = offset - 0
-            offset -= size
-            if size < 350:
-                expect = imgR[offset:].ravel().dot(imgR[offset:].ravel())
-                reflect = imgR[offset:].ravel().dot(imgF[:(size - offset)].ravel())
-            else:
-                expect = np.einsum('ij,ij', imgR[offset:], imgR[offset:])
-                reflect = np.einsum('ij,ij', imgR[offset:], imgF[:(size - offset)])
-
-            # expect = np.sum(imgR[offset:] * imgR[offset:])
-            # reflect = np.sum(imgR[offset:] * imgF[:(size - offset)])
-            symmetryMap[angle, idxOffset] = 0.0 if expect == 0 else reflect / expect
+        compute_upper_map(0, size, imgR, imgF, symmetryMap, angle)
+        compute_lower_map(size, num_offsets, imgR, imgF, symmetryMap, angle, 0)
 
     ############################################
+    if debug:
+        plt.imshow(symmetryMap)
+        plt.show()
     anglestep = 180 / symmetryMap.shape[0]
     # find axes by looking for local maxima
     symScore = np.max(symmetryMap)
     maxima = peak_local_max(symmetryMap, threshold_abs=symScore * .5, threshold_rel=.6,
-                            min_distance=30, num_peaks=5000, exclude_border=False)
+                            min_distance=5, num_peaks=5000, exclude_border=False)
+    maxima = np.array([m if m[0] * anglestep < 45 or m[0] * anglestep > 135 else np.array([-1,-1])for m in maxima])
     peak_scores = symmetryMap[maxima.T[0], maxima.T[1]]
     order = np.argsort(peak_scores)[::-1]
     idxMajor = order[0]
     angle, raw_offset = maxima[idxMajor]
     raw_angle = angle * anglestep
 
-    angle_range = raw_anglestep // 2
+    angle_range = raw_anglestep
     offset_range = size // 5
     num_offsets = offset_range * 2 - 1
-    fine_anglestep = 0.5
+    fine_anglestep = 0.1
     angles = int(angle_range * 2 / fine_anglestep) + 1
     symmetryMap = np.zeros((angles, num_offsets))
 
     for angle in np.arange(raw_angle - angle_range, raw_angle + angle_range + fine_anglestep, fine_anglestep):
-        imgR = rotate(roi, -angle + raw_angle)
+        imgR = rotate(roi, -angle)
         imgF = imgR[::-1]
-        idxAngle = int((angle + angle_range) / fine_anglestep)
+        idxAngle = int(round((angle + angle_range - raw_angle) / fine_anglestep, 1))
 
         if raw_offset - offset_range < size < raw_offset + offset_range:
-            for offset in range(raw_offset - offset_range, size):
-                idxOffset = offset - (raw_offset - offset_range)
-                if size < 350:
-                    expect = imgR[:offset].ravel().dot(imgR[:offset].ravel())
-                    reflect = imgR[:offset].ravel().dot(imgF[(size - offset):].ravel())
-                else:
-                    expect = np.einsum('ij,ij', imgR[:offset], imgR[:offset])
-                    reflect = np.einsum('ij,ij', imgR[:offset], imgF[(size - offset):])
-                symmetryMap[idxAngle, idxOffset] = 0.0 if expect == 0 else reflect / expect
+            compute_upper_map(raw_offset - offset_range, size, imgR, imgF, symmetryMap, idxAngle)
+            compute_lower_map(size, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle, raw_offset - offset_range)
 
-            for offset in range(size, raw_offset + offset_range - 1):
-                idxOffset = offset - (raw_offset - offset_range)
-                offset -= size
-                if size < 350:
-                    expect = imgR[offset:].ravel().dot(imgR[offset:].ravel())
-                    reflect = imgR[offset:].ravel().dot(imgF[:(size - offset)].ravel())
-                else:
-                    expect = np.einsum('ij,ij', imgR[offset:], imgR[offset:])
-                    reflect = np.einsum('ij,ij', imgR[offset:], imgF[:(size - offset)])
-                symmetryMap[idxAngle, idxOffset] = 0.0 if expect == 0 else reflect / expect
         elif raw_offset + offset_range < size:
-            for offset in range(raw_offset - offset_range, raw_offset + offset_range - 1):
-                idxOffset = offset - (raw_offset - offset_range)
-                if size < 350:
-                    expect = imgR[:offset].ravel().dot(imgR[:offset].ravel())
-                    reflect = imgR[:offset].ravel().dot(imgF[(size - offset):].ravel())
-                else:
-                    expect = np.einsum('ij,ij', imgR[:offset], imgR[:offset])
-                    reflect = np.einsum('ij,ij', imgR[:offset], imgF[(size - offset):])
-                symmetryMap[idxAngle, idxOffset] = 0.0 if expect == 0 else reflect / expect
+            compute_upper_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle)
+
         else:
-            for offset in range(raw_offset - offset_range, raw_offset + offset_range - 1):
-                idxOffset = offset - (raw_offset - offset_range)
-                offset -= size
-                if size < 350:
-                    expect = imgR[offset:].ravel().dot(imgR[offset:].ravel())
-                    reflect = imgR[offset:].ravel().dot(imgF[:(size - offset)].ravel())
-                else:
-                    expect = np.einsum('ij,ij', imgR[offset:], imgR[offset:])
-                    reflect = np.einsum('ij,ij', imgR[offset:], imgF[:(size - offset)])
-                symmetryMap[idxAngle, idxOffset] = 0.0 if expect == 0 else reflect / expect
+            compute_lower_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle,
+                              raw_offset - offset_range)
 
     ############################################
     # find major and minor symmetry axes in symmetry map
-    # anglestep = 180 / symmetryMap.shape[0]
-    # size = (symmetryMap.shape[1] + 1) / 2
 
     # find axes by looking for local maxima
     symScore = np.max(symmetryMap)
@@ -202,7 +147,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
 
     idxMajor = order[0]
     angle, offset = maxima[idxMajor]
-    angle = angle * fine_anglestep - angle_range
+    angle = angle * fine_anglestep - angle_range + raw_angle
     offset += raw_offset - offset_range
     major_axis = Axis(
         angle=angle,
@@ -212,7 +157,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
 
     for index in order:
         angle, offset = maxima[index]
-        angle = angle * fine_anglestep - angle_range
+        angle = angle * fine_anglestep - angle_range + raw_angle
         offset += raw_offset - offset_range
         if angle < 45 or angle > 135:
             major_axis = Axis(
@@ -231,7 +176,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
         allAxis = []
         for idx in order:
             angle, offset = maxima[idx]
-            angle = angle * fine_anglestep - angle_range
+            angle = angle * fine_anglestep - angle_range + raw_angle
             offset += raw_offset - offset_range
             axis = Axis(
                 angle=angle,

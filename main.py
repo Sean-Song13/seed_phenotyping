@@ -1,8 +1,3 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-import array
 import os
 
 import numpy as np
@@ -12,8 +7,6 @@ from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow
 import sys
 import time
-from skimage.io import imread
-from skimage.transform import rescale
 from prst import PlanarReflectiveSymmetryTransform
 
 
@@ -216,7 +209,7 @@ def longest_edge(M):
     return max_length
 
 
-def image_preprocessing(image, resize=500, debug = False):
+def image_preprocessing(image, resize=500, debug=False):
     scale_x = float(resize) / image.shape[1]
     scale_y = float(resize) / image.shape[0]
     scale = min(scale_x, scale_y)
@@ -253,10 +246,10 @@ def image_preprocessing(image, resize=500, debug = False):
         plt.title("closing")
         plt.show()
 
-    return  closing
+    return closing
 
 
-def generate_contour_img(roi, theta=2,debug=False):
+def generate_contour_img(roi, theta=2.0, debug=False):
     start = time.perf_counter()
     img, contours, hierarchy = cv2.findContours(image=roi, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_SIMPLE)
     maxlength = 0
@@ -278,6 +271,7 @@ def generate_contour_img(roi, theta=2,debug=False):
         plt.show()
     return img
 
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     debug = False
@@ -286,7 +280,7 @@ if __name__ == '__main__':
     sizes = [160, 320, 480]
     size = 160 * 3
     theta = size / 80
-    result_file = f"{size}N_V_{theta}.txt"
+    result_file = f"{size}N_V_{int(theta)}.txt"
     # angle_file = f"{size}_{theta}_angle.txt"
     # offset_file = f"{size}_{theta}_offset.txt"
 
@@ -402,7 +396,7 @@ if __name__ == '__main__':
     print(f"result in {result_file}\n")
     '''
 
-    image = cv2.imread("6N6_2.V.jpg")
+    image = cv2.imread(r"2N5_1.V.jpg")
     roi = image_preprocessing(image, resize=size, debug=True)
     contour_img = generate_contour_img(roi, theta=theta, debug=True)
     center, major, minor = PlanarReflectiveSymmetryTransform(contour_img, debug=True)
