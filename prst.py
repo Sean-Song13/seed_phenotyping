@@ -140,7 +140,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
     # find axes by looking for local maxima
     symScore = np.max(symmetryMap)
     maxima = peak_local_max(symmetryMap, threshold_abs=symScore * .2, threshold_rel=.6,
-                            min_distance=30, num_peaks=5000, exclude_border=False)
+                            min_distance=20, num_peaks=5000, exclude_border=False)
 
     peak_scores = symmetryMap[maxima.T[0], maxima.T[1]]
     order = np.argsort(peak_scores)[::-1]
@@ -203,4 +203,4 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
         imgplot.set_interpolation('nearest')
         plt.show()
 
-    return image_center, major_axis, major_axis
+    return image_center, major_axis

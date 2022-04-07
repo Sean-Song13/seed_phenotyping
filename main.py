@@ -3,11 +3,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
+import pandas as pd
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow
 import sys
 import time
+from skimage.draw import line_aa, line
+
 from prst import PlanarReflectiveSymmetryTransform
+from utils.util import draw_axes, get_axis, orient
 
 
 def window():
@@ -30,7 +34,7 @@ def print_hi(name):
 
 
 def dis_p2line(x, start, end):
-    line_vec = end - start
+    line_vec = np.subtract(end, start)
     p_vec = x - start
     line_len = np.linalg.norm(line_vec)
     line_unit = line_vec / line_len
@@ -39,7 +43,7 @@ def dis_p2line(x, start, end):
     inner_product = np.clip(inner_product, 0.0, 1.0)
     nearest = start + line_vec * inner_product
     distance = np.linalg.norm(x - nearest)
-    return distance
+    return distance, nearest
 
 
 """
@@ -51,8 +55,8 @@ M: model defined by points (x1, y1), (x2, y2)...
 def min_distance(x, M):
     min_dis = float('inf')
     for i in range(len(M) - 1):
-        min_dis = min(min_dis, dis_p2line(x, M[i][0], M[i + 1][0]))
-    return min(min_dis, dis_p2line(x, M[-1][0], M[0][0]))
+        min_dis = min(min_dis, dis_p2line(x, M[i][0], M[i + 1][0])[0])
+    return min(min_dis, dis_p2line(x, M[-1][0], M[0][0])[0])
 
 
 """
@@ -86,7 +90,7 @@ def gaussian_edge(start, end, theta, gaussian_map):
                 continue
             if target[1] < 0 or target[0] < 0:
                 continue
-            g = simple_gaussian(dis_p2line(target, start, end), theta)
+            g = simple_gaussian(dis_p2line(target, start, end)[0], theta)
             previous_g = gaussian_map[target[1]][target[0]]
             if previous_g != 0:
                 gaussian_map[target[1]][target[0]] = max(g, previous_g)
@@ -98,7 +102,7 @@ def gaussian_edge_opt(start, end, theta, gaussian_map):
     corners = get_padding_corners(start, end, theta)
     pixel = rasterization(corners)
     for p in pixel:
-        g = simple_gaussian(dis_p2line(p, start, end), theta)
+        g = simple_gaussian(dis_p2line(p, start, end)[0], theta)
         if p[1] >= gaussian_map.shape[0] or p[0] >= gaussian_map.shape[1]:
             continue
         previous_g = gaussian_map[p[1]][p[0]]
@@ -269,20 +273,68 @@ def generate_contour_img(roi, theta=2.0, debug=False):
         plt.imshow(img)
         plt.title("contour")
         plt.show()
-    return img
+    return img, longest_contour
 
+
+def width_analysis(contour, size, center, axis, poly=False):
+    start, end = get_axis(size, center, axis)
+    upper_contour = list(filter(lambda p: orient(start, end, p[0]) < 0, contour))
+    lower_contour = list(filter(lambda p: orient(start, end, p[0]) > 0, contour))
+
+    upper_distance, upper_position = get_width_position(upper_contour, start, end)
+    lower_distance, lower_position = get_width_position(lower_contour, start, end)
+
+    fig = plt.figure()
+    axes = fig.add_subplot(111)
+    axes.plot(upper_position, upper_distance, color='orange', label='upper')
+    axes.plot(lower_position, lower_distance, color='blue', label='lower')
+    plt.legend()
+    plt.show()
+
+    if poly:
+        upper_poly = np.polyfit(upper_position, upper_distance, 7)
+        upper_distance = np.poly1d(upper_poly)(upper_position)
+        lower_poly = np.polyfit(lower_position, lower_distance, 7)
+        lower_distance = np.poly1d(lower_poly)(lower_position)
+        fig = plt.figure()
+        axes = fig.add_subplot(111)
+        axes.plot(upper_position, upper_distance, color='orange', label='upper')
+        axes.plot(lower_position, lower_distance, color='blue', label='lower')
+        plt.legend()
+        plt.show()
+
+
+def get_width_position(contour, start, end):
+    dis_and_point = [dis_p2line(point[0], start, end) for point in contour]
+    width = np.array([d[0] for d in dis_and_point])
+    intersections = np.array([d[1] for d in dis_and_point])
+
+    sort_idx = intersections[:, 0].argsort()
+    intersections = intersections[sort_idx]
+    width = width[sort_idx]
+    head = intersections[0]
+    tail = intersections[-1]
+
+    length = np.linalg.norm(np.subtract(head, tail))
+    position = [np.linalg.norm(np.subtract(p, head)) / length for p in intersections]
+
+    return width, position
+
+def find_difference(upper, lower):
+    pass
+
+def find_peek():
+    pass
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    debug = False
+    debug = True
     root = r"E:\Study\CSE598\seed_img"
     target = ["2N", "6N"]
     sizes = [160, 320, 480]
     size = 160 * 3
     theta = size / 80
     result_file = f"{size}N_V_{int(theta)}.txt"
-    # angle_file = f"{size}_{theta}_angle.txt"
-    # offset_file = f"{size}_{theta}_offset.txt"
 
     # for t in target:
     #     group_path = os.path.join(root, t, "CHARRED")
@@ -315,92 +367,20 @@ if __name__ == '__main__':
     #
     # print(f"result in {result_file}\n")
 
-    '''
-    for t in target:
-        group_path = os.path.join(root, t, "CHARRED")
-        if not os.path.isdir(group_path):
-            continue
-        groups = os.listdir(group_path)
-        for g in groups:
-            image_path = os.path.join(group_path, g, "Ventral")
-            if not os.path.isdir(image_path):
-                continue
-            images = os.listdir(image_path)
-            for name in images:
-                full_path = os.path.join(image_path, name)
-                if not os.path.isfile(full_path):
-                    continue
-                image = cv2.imread(full_path)
-                if image.shape[0] < 100:
-                    continue
-                for size in sizes:
-                    if not debug:
-                        print(f"processing: {full_path}")
-                        roi = image_preprocessing(image, resize=size)
-                        theta = int(size/160)
-                        contour_img = generate_contour_img(roi, theta=theta)
-                        center, major, minor = PlanarReflectiveSymmetryTransform(contour_img)
-                        with open(result_file, "a") as f:
-                            f.write("{0:.6f} ".format(major.score))
-                        with open(angle_file, "a") as f:
-                            f.write("{0:.2f} ".format(major.angle))
-                        with open(offset_file, "a") as f:
-                            f.write("{0:.6f} ".format(major.radius / size))
-                        print("\n")
+    image = cv2.imread(r"6N7_1.V.jpg")
+    roi = image_preprocessing(image, resize=size, debug=debug)
+    contour_img, contour = generate_contour_img(roi, theta=theta, debug=debug)
+    center, axis = PlanarReflectiveSymmetryTransform(contour_img, debug=debug)
 
-                with open(result_file, "a") as f:
-                    f.write("\n")
-                with open(angle_file, "a") as f:
-                    f.write("\n")
-                with open(offset_file, "a") as f:
-                    f.write("\n")
-
-        with open(result_file, "a") as f:
-            f.write("\n")
-        with open(angle_file, "a") as f:
-            f.write("\n")
-        with open(offset_file, "a") as f:
-            f.write("\n")
-
-    print(f"result in {result_file}\n")
-    '''
-
-    '''
-    root = r"E:\Study\CSE598\seed_img\6N"
-    target = ["symmetrical", "twisted"]
-    for t in target:
-        image_path = os.path.join(root, t)
-        if not os.path.isdir(image_path):
-            continue
-        images = os.listdir(image_path)
-        for name in images:
-            full_path = os.path.join(image_path, name)
-            if not os.path.isfile(full_path):
-                continue
-            image = cv2.imread(full_path)
-            if image.shape[0] < 100:
-                continue
-            if not debug:
-                print(f"processing: {full_path}")
-                roi = image_preprocessing(image, resize=size)
-
-                contour_img = generate_contour_img(roi, theta=theta)
-                center, major, minor = PlanarReflectiveSymmetryTransform(contour_img)
-                with open(result_file, "a") as f:
-                    f.write("{0:.8f}\n".format(major.score))
-                print("\n")
-
-        with open(result_file, "a") as f:
-            f.write("\n")
-
-    print(f"result in {result_file}\n")
-    '''
-
-    image = cv2.imread(r"2N5_1.V.jpg")
-    roi = image_preprocessing(image, resize=size, debug=True)
-    contour_img = generate_contour_img(roi, theta=theta, debug=True)
-    center, major, minor = PlanarReflectiveSymmetryTransform(contour_img, debug=True)
-
-    # filename = f"{resized.shape[1]}_{resized.shape[0]}_{imagefile}"
-    # img_save = img * 255.
-    # cv2.imwrite(filename, img_save)
+    width_analysis(contour, size, center, axis, poly=True)
+    # out = np.zeros(contour_img.shape[:2])
+    # start, end = get_axis(size, center, axis)
+    # coords = line(start[1], start[0], end[1], end[0])
+    # for r, c in zip(*coords):
+    #     if 0 <= r < out.shape[0] and 0 <= c < out.shape[1]:
+    #         out[r, c] = 255
+    # for point in contour:
+    #     point = point[0]
+    #     out[point[1], point[0]] = 255
+    # plt.imshow(out, cmap="gray")
+    # plt.show()
