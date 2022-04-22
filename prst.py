@@ -46,6 +46,7 @@ def _find_intersection(axis1, axis2, image_center=None):
     y = (axis1.sin * axis2.radius - axis2.sin * axis1.radius) / dt + image_center.y
     return Point(x, y)
 
+
 def compute_upper_map(start, end, imgR, imgF, symmetryMap, angle):
     size = imgR.shape[0]
     for offset in range(start, end):
@@ -57,6 +58,7 @@ def compute_upper_map(start, end, imgR, imgF, symmetryMap, angle):
             expect = np.einsum('ij,ij', imgR[:offset], imgR[:offset])
             reflect = np.einsum('ij,ij', imgR[:offset], imgF[(size - offset):])
         symmetryMap[angle, idxOffset] = 0.0 if expect == 0 else reflect / expect
+
 
 def compute_lower_map(start, end, imgR, imgF, symmetryMap, angle, begin_offset):
     size = imgR.shape[0]
@@ -72,7 +74,7 @@ def compute_lower_map(start, end, imgR, imgF, symmetryMap, angle, begin_offset):
         symmetryMap[angle, idxOffset] = 0.0 if expect == 0 else reflect / expect
 
 
-def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
+def PlanarReflectiveSymmetryTransform(image_roi, direction="h", anglestep=1, debug=False):
     """ Planar-Reflective Symmetry Transform """
     start_timer = time.perf_counter()
     roi, image_center = pad_for_rotation(image_roi[..., 0])
@@ -104,7 +106,11 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
     symScore = np.max(symmetryMap)
     maxima = peak_local_max(symmetryMap, threshold_abs=symScore * .5, threshold_rel=.6,
                             min_distance=5, num_peaks=5000, exclude_border=False)
-    maxima = np.array([m if m[0] * anglestep < 45 or m[0] * anglestep > 135 else np.array([-1,-1])for m in maxima])
+    if direction == "v":
+        maxima = np.array([m if 45 < m[0] * anglestep < 135 else np.array([-1, -1]) for m in maxima])
+    else:
+        maxima = np.array(
+            [m if 45 > m[0] * anglestep or m[0] * anglestep > 135 else np.array([-1, -1]) for m in maxima])
     peak_scores = symmetryMap[maxima.T[0], maxima.T[1]]
     order = np.argsort(peak_scores)[::-1]
     idxMajor = order[0]
@@ -125,13 +131,16 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
 
         if raw_offset - offset_range < size < raw_offset + offset_range:
             compute_upper_map(raw_offset - offset_range, size, imgR, imgF, symmetryMap, idxAngle)
-            compute_lower_map(size, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle, raw_offset - offset_range)
+            compute_lower_map(size, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle,
+                              raw_offset - offset_range)
 
         elif raw_offset + offset_range < size:
-            compute_upper_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle)
+            compute_upper_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap,
+                              idxAngle)
 
         else:
-            compute_lower_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle,
+            compute_lower_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap,
+                              idxAngle,
                               raw_offset - offset_range)
 
     ############################################
@@ -159,14 +168,21 @@ def PlanarReflectiveSymmetryTransform(image_roi, anglestep=1, debug=False):
         angle, offset = maxima[index]
         angle = angle * fine_anglestep - angle_range + raw_angle
         offset += raw_offset - offset_range
-        if angle < 45 or angle > 135:
+        if direction == "v" and 45 < angle < 135:
             major_axis = Axis(
                 angle=angle,
                 radius=(size - offset) / 2,
                 score=peak_scores[index],
             )
             break
-
+        else:
+            if 45 > angle or angle < 135:
+                major_axis = Axis(
+                    angle=angle,
+                    radius=(size - offset) / 2,
+                    score=peak_scores[index],
+                )
+                break
     end_timer = time.perf_counter()
     print(f"Compute PRST in {end_timer - start_timer:0.4f} seconds")
     print(f"score: {major_axis.score}, angle: {major_axis.angle}, normalized radius: {major_axis.radius / size}")

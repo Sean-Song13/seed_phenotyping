@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -72,49 +74,32 @@ def main():
 
 if __name__ == '__main__':
     data = {}
-    data["2"] = []
-    data["6"] = []
-    type = "2"
-    with open("480N_V_6.txt") as file:
+    cate = ""
+    with open("480N_V_0414.txt") as file:
         for line in file:
             line = line.strip()
             if line.startswith("#"):
                 break
-            if line:
-                score = float(line)
-                data[type].append(score)
+            if line.startswith('score'):
+                numbers_pat = r"(\d+\.\d+\b)"
+                numbers = re.findall(numbers_pat, line)
+                score = float(numbers[0])
+                peek = float(numbers[1])
+                peek_diff = float(numbers[2])
+                curve_diff = float(numbers[3])
+                hausdorff = float(numbers[4])
+                if score > 0.75:
+                    data[cate].append(score)
             else:
-                type = "6"
+                cate = line[:-1]
+                data[cate] = []
 
-    print("# 2row mean: {0:.6f} std: {1:.6f}".format(np.mean(data["2"]), np.std(data["2"])))
-    print("# 6row mean: {0:.6f} std: {1:.6f}".format(np.mean(data["6"]), np.std(data["6"])))
+    print("# 2N mean: {0:.6f} std: {1:.6f} number:{2}".format(np.mean(data["2N"]), np.std(data["2N"]), len(data["2N"])))
+    print("# 6N mean: {0:.6f} std: {1:.6f} number:{2}".format(np.mean(data["6N"]), np.std(data["6N"]), len(data["6N"])))
 
     sns.set_theme()
-    sns.distplot(data["2"], label="2")
-    sns.distplot(data["6"], label="6")
-    plt.title('score distribution')
+    sns.distplot(data["2N"], label="2N",bins=10, kde=True)
+    sns.distplot(data["6N"], label="6N",bins=10, kde=True)
+    plt.title('score')
     plt.legend()
     plt.show()
-
-    # data = np.zeros((71, 3))
-    # with open("scores.txt") as file:
-    #     row = 0
-    #     col = 0
-    #     for line in file:
-    #         line = line.strip()
-    #         if line:
-    #             score = float(line)
-    #             data[row % 71][col] = score if score < 90 else score - 180
-    #         else:
-    #             col += 1
-    #             row -= 1
-    #
-    #         row += 1
-    #
-    # difference = [max(d) - min(d) for d in data]
-    #
-    # sns.set_theme()
-    # sns.distplot(difference, kde=False)
-    # plt.title('score differences')
-    # plt.legend()
-    # plt.show()

@@ -251,10 +251,14 @@ def get_axis(size, center, axis):
     x1, y1 = int(round(center.x + dx) - bias_x), int(round(center.y + dy) - bias_y)
 
     r, c = line(y0, x0, y1, x1)
-    start = r[np.where(c == 0)[0][0]]
-    end = r[np.where(c == size - 1)[0][0]]
-
-    return [0, start], [size, end]
+    if 45 < axis.angle < 135:
+        start = c[np.where(r == 0)[0][0]]
+        end = c[np.where(r == center[1]*2 - 1)[0][0]]
+        return [start, 0], [end, center[1]*2]
+    else:
+        start = r[np.where(c == 0)[0][0]]
+        end = r[np.where(c == size - 1)[0][0]]
+        return [0, start], [size, end]
 
 
 def segmentation_edges(image):
