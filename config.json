@@ -1,0 +1,10 @@
+{
+  "root": "E:\\Study\\CSE598\\seed_img\\6N",
+  "category" : ["2row", "6row"],
+  "width" : 480,
+  "output" : "result.csv",
+  "direction" : "h",
+  "batch operation": false,
+  "single image test": true,
+  "image path" : "2N5_1.V.jpg"
+}

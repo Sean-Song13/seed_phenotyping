@@ -1,15 +1,5 @@
-#
-# Gemini -- Planar-Reflective Symmetry Transform
-#
-# Copyright (c) 2014-2015 Carnegie Mellon University
-# All rights reserved.
-#
-# This software is distributed under the terms of the Eclipse Public
-# License, Version 1.0 which can be found in the file named LICENSE.
-# ANY USE, REPRODUCTION OR DISTRIBUTION OF THIS SOFTWARE CONSTITUTES
-# RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT
-#
 # @reference
+#  Gemini -- 2014-2015 Carnegie Mellon University
 #  Joshua Podolak, Philip Shilane, Aleksey Golovinskiy, Szymon Rusinkiewicz,
 #  and Thomas Funkhouser. A Planar-Reflective Symmetry Transform for 3D Shapes.
 #  ACM Transactions on Graphics (Proc. SIGGRAPH). 25(3) July 2006
@@ -20,31 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from skimage.feature import peak_local_max
 from skimage.transform import rotate
-
-from utils.util import Point, Axis, pad_for_rotation, image_roi_offset, draw_axes
-
-
-def _symToXY(axis, image_center=None):
-    """ convert from symmetrymap coordinates to roi coordinates """
-    if image_center is None: image_center = Point(0, 0)
-
-    X = (axis.radius * axis.sin) / 2 + image_center.x
-    Y = (axis.radius * -axis.cos) / 2 + image_center.y
-    return Point(X, Y)
-
-
-def _find_intersection(axis1, axis2, image_center=None):
-    """ estimate symmetry center from the major and minor axes.
-    takes into account that the image's vertical axis points down
-    """
-    if image_center is None: image_center = Point(0, 0)
-
-    dt = axis1.cos * axis2.sin - axis1.sin * axis2.cos
-    assert (dt != 0)  # axes must not be parallel!
-
-    x = (axis2.cos * axis1.radius - axis1.cos * axis2.radius) / dt + image_center.x
-    y = (axis1.sin * axis2.radius - axis2.sin * axis1.radius) / dt + image_center.y
-    return Point(x, y)
+from utils.util import  Axis, pad_for_rotation, draw_axes
 
 
 def compute_upper_map(start, end, imgR, imgF, symmetryMap, angle):
@@ -100,6 +66,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, direction="h", anglestep=1, deb
     ############################################
     if debug:
         plt.imshow(symmetryMap)
+        plt.title('raw symmetry map')
         plt.show()
     anglestep = 180 / symmetryMap.shape[0]
     # find axes by looking for local maxima
@@ -134,7 +101,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, direction="h", anglestep=1, deb
             compute_lower_map(size, raw_offset + offset_range - 1, imgR, imgF, symmetryMap, idxAngle,
                               raw_offset - offset_range)
 
-        elif raw_offset + offset_range < size:
+        elif raw_offset + offset_range <= size:
             compute_upper_map(raw_offset - offset_range, raw_offset + offset_range - 1, imgR, imgF, symmetryMap,
                               idxAngle)
 
@@ -203,7 +170,7 @@ def PlanarReflectiveSymmetryTransform(image_roi, direction="h", anglestep=1, deb
         for i in range(len(allAxis)):
             axis = allAxis[i]
             plt.subplot(2, math.ceil(len(allAxis) / 2.), i + 1)
-            plt.title("%d " % axis.score)
+            plt.title("%f " % axis.score)
             imgplot = plt.imshow(draw_axes(image_roi[..., 0] * 255, image_center, axis))
             imgplot.set_interpolation('nearest')
         plt.show()
@@ -213,8 +180,9 @@ def PlanarReflectiveSymmetryTransform(image_roi, direction="h", anglestep=1, deb
         imgplot.set_interpolation('nearest')
         plt.subplot(222)
         plt.imshow(symmetryMap)
+        plt.title('fine symmetry map')
         plt.subplot(223)
-        plt.title("%d " % major_axis.score)
+        plt.title("%f " % major_axis.score)
         imgplot = plt.imshow(draw_axes(image_roi[..., 0] * 255, image_center, major_axis), cmap="gray")
         imgplot.set_interpolation('nearest')
         plt.show()
